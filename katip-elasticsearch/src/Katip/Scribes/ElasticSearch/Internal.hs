@@ -298,7 +298,7 @@ mkEsScribe cfg@EsScribeCfg {..} env ix mapping sev verb = do
   let finalizer = putMVar endSig () >> takeMVar endSig
   return (Scribe (logger q) finalizer)
   where
-    logger :: forall a. LogItem a => TBMQueue (IndexName v, Value) -> Item a -> IO ()
+    logger :: forall a. LogItemObj a => TBMQueue (IndexName v, Value) -> Item a -> IO ()
     logger q i = when (_itemSeverity i >= sev) $
       void $ atomically $ tryWriteTBMQueue q (chooseIxn prx ix essIndexSharding i, itemJson' i)
     prx :: Typeable.Proxy v
@@ -310,7 +310,7 @@ mkEsScribe cfg@EsScribeCfg {..} env ix mapping sev verb = do
     tpl = toIndexTemplate prx (toTemplatePattern prx (ixn <> "-*")) (Just essIndexSettings) [toJSON base]
     base = baseMapping prx mapping
     ixn = fromIndexName prx ix
-    itemJson' :: LogItem a => Item a -> Value
+    itemJson' :: LogItemObj a => Item a -> Value
     itemJson' i
       | essAnnotateTypes = itemJson verb (TypeAnnotated <$> i)
       | otherwise        = itemJson verb i

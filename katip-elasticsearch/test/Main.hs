@@ -299,12 +299,9 @@ data ExampleCtx = ExampleCtx {
 instance ToJSON ExampleCtx where
   toJSON c = object ["whatever" .= ecBool c]
 
-
 instance ToObject ExampleCtx
 
-
-instance LogItem ExampleCtx where
-  payloadKeys _ _ = AllKeys
+instance LogItemObj ExampleCtx
 
 -------------------------------------------------------------------------------
 typeAnnotatedTests :: TestTree

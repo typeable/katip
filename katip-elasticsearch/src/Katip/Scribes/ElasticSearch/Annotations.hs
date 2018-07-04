@@ -38,16 +38,8 @@ instance ToObject a => ToObject (TypeAnnotated a) where
 instance FromJSON a => FromJSON (TypeAnnotated a) where
   parseJSON v = TypeAnnotated A.<$> parseJSON (deannotateValue v)
 
-
-instance LogItem a => LogItem (TypeAnnotated a) where
-  payloadKeys v (TypeAnnotated x) = case payloadKeys v x of
-    AllKeys -> AllKeys
-    -- Take the key selection, overlap it with the actual keys
-    -- produced and annotate them
-    SomeKeys ks -> let o = toObject x
-                       oInFocus = HM.fromList $ zip ks (repeat Null)
-                       final = annotateKeys $ HM.intersection o oInFocus
-                   in SomeKeys $ HM.keys final
+instance LogItemObj a => LogItemObj (TypeAnnotated a) where
+  logItemObj (TypeAnnotated a) verb = annotateKeys $ logItemObj a verb
 
 -------------------------------------------------------------------------------
 -- Conversion Functions
