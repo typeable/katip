@@ -86,7 +86,7 @@
 -- namespaces.
 --
 -- * Define some structured log data throughout your application and
--- implement 'ToObject' and 'LogItem' for them.
+-- implement 'ToObject' and 'LogItemObj' for them.
 --
 -- * Begin logging with 'logT', 'logTM', etc.
 --
@@ -104,7 +104,7 @@ module Katip
     , textToSeverity
     , Verbosity (..)
     , ToObject (..)
-    , LogItem (..)
+    , LogItemObj (..)
     , Item(..)
     , ThreadIdText(..)
     , PayloadSelection (..)
@@ -168,7 +168,6 @@ module Katip
     , logTM
     , logItemM
     , logExceptionM
-    , AnyLogContext
     , LogContexts, liftPayload
     -- *** Temporarily Changing Logging Behavior
     , katipAddNamespace
@@ -182,7 +181,6 @@ module Katip
 
     -- * Tools for implementing Scribes
     , permitItem
-    , payloadObject
     , itemJson
 
     -- * KatipContextT - Utility transformer that provides Katip and KatipContext instances
@@ -245,7 +243,7 @@ superclass of 'Katip' that also has a mechanism for keeping track of
 the current context and namespace. This means a few things:
 
 1. Functions that use 'KatipContext' like 'logFM' and 'logTM' do not
-require you to pass in 'LogItem's or 'Namespaces', they pull them from
+require you to pass in 'LogItemObj's or 'Namespaces', they pull them from
 the monadic environment.
 
 2. It becomes easy to add functions which add namespaces and/or

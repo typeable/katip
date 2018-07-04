@@ -24,7 +24,6 @@ module Katip.Monadic
 
     -- * Machinery for merging typed log payloads/contexts
     , KatipContext(..)
-    , AnyLogContext
     , LogContexts
     , liftPayload
 
@@ -71,12 +70,6 @@ import           Language.Haskell.TH
 import           Katip.Core
 -------------------------------------------------------------------------------
 
--- | A wrapper around a log context that erases type information so
--- that contexts from multiple layers can be combined intelligently.
-data AnyLogContext where
-    AnyLogContext :: (LogItem a) => a -> AnyLogContext
-
-
 -------------------------------------------------------------------------------
 -- | Heterogeneous list of log contexts that provides a smart
 -- 'LogContext' instance for combining multiple payload policies. This
@@ -94,31 +87,25 @@ data AnyLogContext where
 -- Additional note: you should not mappend LogContexts in any sort of
 -- infinite loop, as it retains all data, so that would be a memory
 -- leak.
-newtype LogContexts = LogContexts (Seq AnyLogContext) deriving (Monoid, Semigroup)
+newtype LogContexts = LogContexts (Verbosity -> Object)
 
-instance ToJSON LogContexts where
-    toJSON (LogContexts cs) =
-      -- flip mappend to get right-biased merge
-      Object $ FT.foldr (flip mappend) mempty $ fmap (\(AnyLogContext v) -> toObject v) cs
+instance Semigroup LogContexts where
+  LogContexts a <> LogContexts b = LogContexts $ \verb ->
+    a verb <> b verb
 
-instance ToObject LogContexts
+instance Monoid LogContexts where
+  mempty  = LogContexts $ const $ mempty
+  mappend = (<>)
 
-instance LogItem LogContexts where
-    payloadKeys verb (LogContexts vs) = FT.foldr (flip mappend) mempty $ fmap payloadKeys' vs
-      where
-        -- To ensure AllKeys doesn't leak keys from other values when
-        -- combined, we resolve AllKeys to its equivalent SomeKeys
-        -- representation first.
-        payloadKeys' (AnyLogContext v) = case payloadKeys verb v of
-          AllKeys -> SomeKeys $ HM.keys $ toObject v
-          x       -> x
+instance LogItemObj LogContexts where
+    logItemObj (LogContexts vs) verb = vs verb
 
 
 -------------------------------------------------------------------------------
 -- | Lift a log context into the generic wrapper so that it can
 -- combine with the existing log context.
-liftPayload :: (LogItem a) => a -> LogContexts
-liftPayload = LogContexts . Seq.singleton . AnyLogContext
+liftPayload :: (LogItemObj a) => a -> LogContexts
+liftPayload item = LogContexts $ logItemObj item
 
 
 -------------------------------------------------------------------------------
@@ -391,7 +378,7 @@ instance (MonadIO m) => KatipContext (KatipContextT m) where
 
 
 -------------------------------------------------------------------------------
-runKatipContextT :: (LogItem c) => LogEnv -> c -> Namespace -> KatipContextT m a -> m a
+runKatipContextT :: (LogItemObj c) => LogEnv -> c -> Namespace -> KatipContextT m a -> m a
 runKatipContextT le ctx ns = flip runReaderT lts . unKatipContextT
   where
     lts = KatipContextTState le (liftPayload ctx) ns
@@ -422,7 +409,7 @@ katipAddNamespace ns = localKatipNamespace (<> ns)
 -- stored in a sequence and will leak memory. Works with anything
 -- implementing KatipContext.
 katipAddContext
-    :: ( LogItem i
+    :: ( LogItemObj i
        , KatipContext m
        )
     => i

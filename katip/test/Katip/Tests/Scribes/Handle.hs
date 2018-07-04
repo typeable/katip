@@ -34,9 +34,9 @@ tests = testGroup "Katip.Scribes.Handle"
   [
     withResource setup teardown $ \setupScribe -> testCase "logs the correct data" $ do
        (path, h, fin, le) <- setupScribe
-       runKatipT le $ logItem dummyLogItem "test" Nothing InfoS "test message"
+       runKatipT le $ logItem dummyLogItemObj "test" Nothing InfoS "test message"
        fin
-       runKatipT le $ logItem dummyLogItem "test" Nothing InfoS "wont make it in"
+       runKatipT le $ logItem dummyLogItemObj "test" Nothing InfoS "wont make it in"
        hClose h
        res <- readFile path
        let pat = "\\[[[:digit:]]{4}-[[:digit:]]{2}-[[:digit:]]{2} [[:digit:]]{2}:[[:digit:]]{2}:[[:digit:]]{2}\\]\\[katip-test.test\\]\\[Info\\]\\[.+\\]\\[[[:digit:]]+\\]\\[ThreadId [[:digit:]]+\\]\\[note.deep:some note\\] test message" :: String
@@ -44,9 +44,9 @@ tests = testGroup "Katip.Scribes.Handle"
        assertBool (show res <> " did not match") matches
   , withResource setupFile (const (return ())) $ \setupScribe -> testCase "logs correct data to a file" $ do
       (path, fin, le) <- setupScribe
-      runKatipT le $ logItem dummyLogItem "test" Nothing InfoS "test message"
+      runKatipT le $ logItem dummyLogItemObj "test" Nothing InfoS "test message"
       fin
-      runKatipT le $ logItem dummyLogItem "test" Nothing InfoS "wont make it in"
+      runKatipT le $ logItem dummyLogItemObj "test" Nothing InfoS "wont make it in"
       res <- readFile path
       let pat = "\\[[[:digit:]]{4}-[[:digit:]]{2}-[[:digit:]]{2} [[:digit:]]{2}:[[:digit:]]{2}:[[:digit:]]{2}\\]\\[katip-test.test\\]\\[Info\\]\\[.+\\]\\[[[:digit:]]+\\]\\[ThreadId [[:digit:]]+\\]\\[note.deep:some note\\] test message" :: String
       let matches = res =~ pat
@@ -59,28 +59,28 @@ tests = testGroup "Katip.Scribes.Handle"
 
 
 -------------------------------------------------------------------------------
-data DummyLogItem = DummyLogItem {
+data DummyLogItemObj = DummyLogItemObj {
       dliNote :: Text
     }
 
 
-instance ToJSON DummyLogItem where
+instance ToJSON DummyLogItemObj where
   toJSON dli = object
     [ "note" .= object [ "deep" .= dliNote dli
                        ]
     ]
 
 
-instance ToObject DummyLogItem
+instance ToObject DummyLogItemObj
 
 
-instance LogItem DummyLogItem where
-  payloadKeys _ _ = AllKeys
+instance LogItemObj DummyLogItemObj where
+  logItemObj _ _ = AllKeys
 
 
 -------------------------------------------------------------------------------
-dummyLogItem :: DummyLogItem
-dummyLogItem = DummyLogItem "some note"
+dummyLogItemObj :: DummyLogItemObj
+dummyLogItemObj = DummyLogItemObj "some note"
 
 
 -------------------------------------------------------------------------------
@@ -120,16 +120,16 @@ setupFile = do
 --
 -- Note: currently Handle scribe does not write Array items at all
 -------------------------------------------------------------------------------
-data AllTypesLogItem = AllTypesLogItem
+data AllTypesLogItemObj = AllTypesLogItemObj
     { atlText  :: Text
     , atlNum   :: Int
     , atlFloat :: Float
     , atlList  :: [Text]
-    , atlSub   :: Maybe DummyLogItem
+    , atlSub   :: Maybe DummyLogItemObj
     }
 
 
-instance ToJSON AllTypesLogItem where
+instance ToJSON AllTypesLogItemObj where
   toJSON it = object
     [ "text"     .= atlText it
     , "num"      .= atlNum it
@@ -139,28 +139,28 @@ instance ToJSON AllTypesLogItem where
     ]
 
 
-instance ToObject AllTypesLogItem
+instance ToObject AllTypesLogItemObj
 
 
-instance LogItem AllTypesLogItem where
-  payloadKeys _ _ = AllKeys
+instance LogItemObj AllTypesLogItemObj where
+  logItemObj _ _ = AllKeys
 
 
 -------------------------------------------------------------------------------
-theItem :: Item DummyLogItem
+theItem :: Item DummyLogItemObj
 theItem = Item (Namespace ["app"])
                (Environment "production")
                (InfoS)
                (ThreadIdText "1337")
                "example"
                7331
-               dummyLogItem
+               dummyLogItemObj
                "message"
                (mkUTCTime 2016 6 12 12 34 56)
                (Namespace ["foo"])
                Nothing
 
-genItems :: [Item DummyLogItem]
+genItems :: [Item DummyLogItemObj]
 genItems = concat $
   [ [ itemSeverity .~ s $ theItem
           | s <- [minBound .. maxBound]
@@ -217,12 +217,12 @@ genLocs =
                (3000,9000) (4000,1)
   ]
 
-genTypedItems :: [Item AllTypesLogItem]
+genTypedItems :: [Item AllTypesLogItemObj]
 genTypedItems =
   [ itemPayload .~ p $ theItem
-        | p <- [ AllTypesLogItem "" 0 0.0 [] Nothing
-               , AllTypesLogItem "note" 10 5.5 ["one", "two", "three"]
-                     (Just dummyLogItem)
+        | p <- [ AllTypesLogItemObj "" 0 0.0 [] Nothing
+               , AllTypesLogItemObj "note" 10 5.5 ["one", "two", "three"]
+                     (Just dummyLogItemObj)
                ]
   ]
 
@@ -240,7 +240,7 @@ writeTextLog (path, h) = do
     hClose h
     BL.readFile path
   where
-    formatOne :: LogItem a => Item a -> Text
+    formatOne :: LogItemObj a => Item a -> Text
     formatOne = LT.toStrict . LT.toLazyText . formatItem False V3
     put = B.hPutStrLn h . T.encodeUtf8
 

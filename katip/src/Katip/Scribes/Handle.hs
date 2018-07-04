@@ -27,8 +27,8 @@ brackets m = fromText "[" <> m <> fromText "]"
 
 
 -------------------------------------------------------------------------------
-getKeys :: LogItem s => Verbosity -> s -> [Builder]
-getKeys verb a = concat (renderPair A.<$> HM.toList (payloadObject verb a))
+getKeys :: LogItemObj s => Verbosity -> s -> [Builder]
+getKeys verb a = concat (renderPair A.<$> HM.toList (logItemObj a verb))
   where
     renderPair :: (Text, Value) -> [Builder]
     renderPair (k,v) =
@@ -90,7 +90,7 @@ mkFileScribe f sev verb = do
 
 
 -------------------------------------------------------------------------------
-formatItem :: LogItem a => Bool -> Verbosity -> Item a -> Builder
+formatItem :: LogItemObj a => Bool -> Verbosity -> Item a -> Builder
 formatItem withColor verb Item{..} =
     brackets nowStr <>
     brackets (mconcat $ map fromText $ intercalateNs _itemNamespace) <>

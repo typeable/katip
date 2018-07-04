@@ -52,7 +52,7 @@ import           Data.Aeson                   (FromJSON (..), ToJSON (..),
                                                object)
 import qualified Data.Aeson                   as A
 import           Data.Foldable                as FT
-import qualified Data.HashMap.Strict          as HM
+-- import qualified Data.HashMap.Strict          as HM
 import           Data.List
 import qualified Data.Map.Strict                       as M
 import           Data.Semigroup
@@ -428,7 +428,7 @@ instance ToObject ()
 instance ToObject A.Object
 
 -------------------------------------------------------------------------------
--- | Payload objects need instances of this class. LogItem makes it so
+-- | Payload objects need instances of this class. LogItemObj makes it so
 -- that you can have very verbose items getting logged with lots of
 -- extra fields but under normal circumstances, if your scribe is
 -- configured for a lower verbosity level, it will only log a
@@ -438,18 +438,18 @@ instance ToObject A.Object
 -- runtime swap out your existing scribes for more verbose debugging
 -- scribes if you wanted to.
 --
--- When defining 'payloadKeys', don't redundantly declare the same
+-- When defining 'logItemObj', don't redundantly declare the same
 -- keys for higher levels of verbosity. Each level of verbosity
 -- automatically and recursively contains all keys from the level
 -- before it.
-class ToObject a => LogItem a where
+class LogItemObj a where
 
     -- | List of keys in the JSON object that should be included in message.
-    payloadKeys :: Verbosity -> a -> PayloadSelection
+    logItemObj :: a -> Verbosity -> A.Object
+    default logItemObj :: ToObject a => a -> Verbosity -> A.Object
+    logItemObj a _ = toObject a
 
-
-instance LogItem () where payloadKeys _ _ = SomeKeys []
-
+instance LogItemObj ()
 
 data AnyLogPayload = forall a. ToJSON a => AnyLogPayload a
 
@@ -472,9 +472,9 @@ instance ToJSON SimpleLogPayload where
 instance ToObject SimpleLogPayload
 
 
-instance LogItem SimpleLogPayload where
-    payloadKeys V0 _ = SomeKeys []
-    payloadKeys _ _  = AllKeys
+instance LogItemObj SimpleLogPayload where
+    logItemObj _ V0 = toObject ()
+    logItemObj a  _ = toObject a
 
 
 instance Semigroup SimpleLogPayload where
@@ -493,20 +493,11 @@ sl a b = SimpleLogPayload [(a, AnyLogPayload b)]
 
 
 -------------------------------------------------------------------------------
--- | Constrain payload based on verbosity. Backends should use this to
--- automatically bubble higher verbosity levels to lower ones.
-payloadObject :: LogItem a => Verbosity -> a -> A.Object
-payloadObject verb a = case FT.foldMap (flip payloadKeys a) [(V0)..verb] of
-    AllKeys     -> toObject a
-    SomeKeys ks -> HM.filterWithKey (\ k _ -> k `FT.elem` ks) $ toObject a
-
-
--------------------------------------------------------------------------------
 -- | Convert log item to its JSON representation while trimming its
 -- payload based on the desired verbosity. Backends that push JSON
 -- messages should use this to obtain their payload.
-itemJson :: LogItem a => Verbosity -> Item a -> A.Value
-itemJson verb a = toJSON $ a & itemPayload %~ payloadObject verb
+itemJson :: LogItemObj a => Verbosity -> Item a -> A.Value
+itemJson verb a = toJSON $ a & itemPayload %~ flip logItemObj verb
 
 
 -------------------------------------------------------------------------------
@@ -522,7 +513,7 @@ itemJson verb a = toJSON $ a & itemPayload %~ payloadObject verb
 -- should be ignored. Katip provides the 'permitItem' utility for this.
 --
 -- Verbosity is used to select keys from the log item's payload. Each
--- 'LogItem' instance describes what keys should be retained for each
+-- 'LogItemObj' instance describes what keys should be retained for each
 -- Verbosity level. Use the 'payloadObject' utility for extracting the keys
 -- that should be permitted.
 --
@@ -541,7 +532,7 @@ itemJson verb a = toJSON $ a & itemPayload %~ payloadObject verb
 -- application's shutdown routine to ensure you never miss any log
 -- messages on shutdown.
 data Scribe = Scribe {
-     liPush          :: forall a. LogItem a => Item a -> IO ()
+     liPush          :: forall a. LogItemObj a => Item a -> IO ()
    , scribeFinalizer :: IO ()
    -- ^ Provide a *blocking* finalizer to call when your scribe is
    -- removed. If this is not relevant to your scribe, return () is
@@ -568,7 +559,7 @@ data ScribeHandle = ScribeHandle {
 
 -------------------------------------------------------------------------------
 data WorkerMessage where
-  NewItem    :: LogItem a => Item a -> WorkerMessage
+  NewItem    :: LogItemObj a => Item a -> WorkerMessage
   PoisonPill :: WorkerMessage
 
 
@@ -855,7 +846,7 @@ katipNoLogging = localLogEnv (\le -> set logEnvScribes mempty le)
 -- | Log with everything, including a source code location. This is
 -- very low level and you typically can use 'logT' in its place.
 logItem
-    :: (A.Applicative m, LogItem a, Katip m)
+    :: (A.Applicative m, LogItemObj a, Katip m)
     => a
     -> Namespace
     -> Maybe Loc
@@ -894,7 +885,7 @@ tryWriteTBQueue q a = do
 -------------------------------------------------------------------------------
 -- | Log with full context, but without any code location.
 logF
-  :: (Applicative m, LogItem a, Katip m)
+  :: (Applicative m, LogItemObj a, Katip m)
   => a
   -- ^ Contextual payload for the log
   -> Namespace
@@ -914,7 +905,7 @@ logF a ns sev msg = logItem a ns Nothing sev msg
 --
 -- >>>> logException () mempty ErrorS (error "foo")
 logException
-    :: (Katip m, LogItem a, MonadCatch m, Applicative m)
+    :: (Katip m, LogItemObj a, MonadCatch m, Applicative m)
     => a                        -- ^ Log context
     -> Namespace                -- ^ Namespace
     -> Severity                 -- ^ Severity
@@ -1023,9 +1014,9 @@ logT = [| \ a ns sev msg -> logItem a ns (Just $(getLocTH)) sev msg |]
 --
 -- @logLoc obj mempty InfoS "Hello world"@
 #if MIN_VERSION_base(4, 8, 0)
-logLoc :: (Applicative m, LogItem a, Katip m, ?loc :: CallStack)
+logLoc :: (Applicative m, LogItemObj a, Katip m, ?loc :: CallStack)
 #else
-logLoc :: (Applicative m, LogItem a, Katip m)
+logLoc :: (Applicative m, LogItemObj a, Katip m)
 #endif
        => a
        -> Namespace

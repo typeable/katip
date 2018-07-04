@@ -66,12 +66,12 @@ logContextsTests = testGroup "logContexts"
           l3 = liftPayload (SimpleLogPayload [("foo", AnyLogPayload ("c" :: Text))])
           both = l1 <> l2 <> l3
       toObject both @?= HM.singleton "foo" (String "c")
-  , testCase "respects payloadKeys for each constituent payload" $ do
+  , testCase "respects logItemObj for each constituent payload" $ do
       let everything = liftPayload (SimpleLogPayload [("foo", AnyLogPayload ("a" :: Text))])
           conservative = liftPayload (ConservativePayload "always" "rarely")
           both = everything <> conservative
-      payloadKeys V2 both @?= SomeKeys ["often_shown", "rarely_shown", "foo"]
-      payloadKeys V1 both @?= SomeKeys ["often_shown", "foo"]
+      logItemObj V2 both @?= SomeKeys ["often_shown", "rarely_shown", "foo"]
+      logItemObj V1 both @?= SomeKeys ["often_shown", "foo"]
   ]
 
 
@@ -204,10 +204,10 @@ instance ToJSON ConservativePayload where
 instance ToObject ConservativePayload
 
 
-instance LogItem ConservativePayload where
-  payloadKeys V1 _ = SomeKeys ["often_shown"]
-  payloadKeys V0 _ = SomeKeys []
-  payloadKeys _ _  = AllKeys
+instance LogItemObj ConservativePayload where
+  logItemObj V1 _ = SomeKeys ["often_shown"]
+  logItemObj V0 _ = SomeKeys []
+  logItemObj _ _  = AllKeys
 
 -------------------------------------------------------------------------------
 prop_json_cycle :: (ToJSON a, FromJSON a, Eq a, Show a) => a -> Property

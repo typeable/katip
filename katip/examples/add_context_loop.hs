@@ -65,5 +65,5 @@ instance K.ToObject SomeContext where
   toObject (SomeContext sz) = HM.fromList [ SC.toS (show n) A..= () | n <- [0..sz]]
 
 
-instance K.LogItem SomeContext where
-  payloadKeys _ _ = K.AllKeys
+instance K.LogItemObj SomeContext where
+  logItemObj _ _ = K.AllKeys

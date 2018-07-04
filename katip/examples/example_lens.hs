@@ -83,8 +83,8 @@ instance ToJSON ConfrabLogCTX where
 instance ToObject ConfrabLogCTX
 
 
-instance LogItem ConfrabLogCTX where
-  payloadKeys _verb _a = AllKeys
+instance LogItemObj ConfrabLogCTX where
+  logItemObj _verb _a = AllKeys
 
 
 -------------------------------------------------------------------------------

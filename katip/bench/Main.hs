@@ -79,8 +79,8 @@ instance ToJSON ExPayload where
 
 instance ToObject ExPayload
 
-instance LogItem ExPayload where
-  payloadKeys _ _ = AllKeys
+instance LogItemObj ExPayload where
+  logItemObj _ _ = AllKeys
 
 
 -------------------------------------------------------------------------------
