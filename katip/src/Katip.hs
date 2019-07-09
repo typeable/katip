@@ -181,6 +181,7 @@ module Katip
     , mkHandleScribe
     , mkHandleScribeWithFormatter
     , mkFileScribe
+    , mkFileScribeWithFormatter
     , ColorStrategy (..)
     , ItemFormatter
     , bracketFormat
