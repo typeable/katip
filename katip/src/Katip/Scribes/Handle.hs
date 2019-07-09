@@ -3,45 +3,47 @@ module Katip.Scribes.Handle where
 -------------------------------------------------------------------------------
 import           Control.Applicative    as A
 import           Control.Concurrent
-import           Control.Exception      (bracket_, finally)
-import           Data.ByteString.Lazy as BL (hPutStr)
-import           Data.ByteString.Builder as B
+import           Control.Exception      (finally)
 import           Data.Aeson
-import           Data.Text as T (pack)
-import           Data.Text.Encoding as T
-import           Data.Text.Lazy as TL (toStrict)
-import           Data.Text.Lazy.Encoding as TL (decodeUtf8)
-import qualified Data.HashMap.Strict    as HM
+import           Data.Aeson.Text
+import           Data.ByteString.Builder as B
+import           Data.ByteString.Lazy    as BL (hPutStr)
 import           Data.Monoid            as M
 import           Data.Scientific        as S
 import           Data.Text              (Text)
+import           Data.Text.Lazy.Builder as TL
+import           Data.Text.Lazy.Encoding     (encodeUtf8)
 import           System.IO
+import qualified Data.HashMap.Strict    as HM
+
 -------------------------------------------------------------------------------
 import           Katip.Core
 import           Katip.Format.Time      (formatAsLogTime)
 -------------------------------------------------------------------------------
 
 
+-------------------------------------------------------------------------------
+brackets :: TL.Builder -> TL.Builder
+brackets m = fromText "[" M.<> m <> fromText "]"
 
-fromText :: Text -> Builder
-fromText = B.byteString . T.encodeUtf8
+textBuilderToBS :: TL.Builder -> B.Builder
+textBuilderToBS = B.lazyByteString . encodeUtf8 . toLazyText
+
+appendNL :: TL.Builder -> TL.Builder
+appendNL b = b <> TL.singleton '\n'
 
 -------------------------------------------------------------------------------
-brackets :: Builder -> Builder
-brackets m = fromText "[" <> m <> fromText "]"
-
--------------------------------------------------------------------------------
-getKeys :: LogItem s => Verbosity -> s -> [Builder]
-getKeys verb a = HM.toList (payloadObject verb a) >>= renderPair
+getKeys :: LogItem s => Verbosity -> s -> [TL.Builder]
+getKeys verb a = concat (renderPair A.<$> HM.toList (payloadObject verb a))
   where
-    renderPair :: (Text, Value) -> [Builder]
+    renderPair :: (Text, Value) -> [TL.Builder]
     renderPair (k,v) =
       case v of
         Object o -> concat [renderPair (k <> "." <> k', v')  | (k', v') <- HM.toList o]
-        String t -> [fromText k <> string7 ":" <> fromText t]
-        Number n -> [fromText k <> string7 ":" <> string7 (formatNumber n)]
-        Bool b -> [fromText k <> string7 ":" <> string7 (show b)]
-        Null -> [fromText k <> string7 ":null"]
+        String t -> [fromText (k <> ":" <> t)]
+        Number n -> [fromText (k <> ":") <> fromString (formatNumber n)]
+        Bool b -> [fromText (k <> ":") <> fromString (show b)]
+        Null -> [fromText (k <> ":null")]
         _ -> mempty -- Can't think of a sensible way to handle arrays
     formatNumber :: Scientific -> String
     formatNumber n =
@@ -107,7 +109,8 @@ mkFileScribe f permitF verb = do
 -------------------------------------------------------------------------------
 -- | A custom ItemFormatter for logging `Item`s. Takes a `Bool` indicating
 -- whether to colorize the output, `Verbosity` of output, and an `Item` to
--- format.
+-- format. Note that formatter is responsible for appending the newline at the
+-- end of the string if required
 --
 -- See `bracketFormat` and `jsonFormat` for examples.
 type ItemFormatter a = Bool -> Verbosity -> Item a -> B.Builder
@@ -124,21 +127,21 @@ formatItem = bracketFormat
 -- > [2016-05-11 21:01:15][MyApp.confrabulation][Debug][myhost.example.com][PID 1724][ThreadId 1154][confrab_factor:42.0][main:Helpers.Logging Helpers/Logging.hs:41:9] Confrabulating widgets, with extra namespace and context
 -- > [2016-05-11 21:01:15][MyApp][Info][myhost.example.com][PID 1724][ThreadId 1154][main:Helpers.Logging Helpers/Logging.hs:43:7] Namespace and context are back to normal
 bracketFormat :: LogItem a => ItemFormatter a
-bracketFormat withColor verb Item{..} =
+bracketFormat withColor verb Item{..} = textBuilderToBS $ appendNL $
     brackets nowStr <>
     brackets (mconcat $ map fromText $ intercalateNs _itemNamespace) <>
-    brackets (fromText (renderSeverity' _itemSeverity)) <>
-    brackets (fromText (T.pack _itemHost)) <>
-    brackets ("PID " <> fromText (T.pack $ show _itemProcess)) <>
+    brackets (renderSeverity' _itemSeverity) <>
+    brackets (fromString _itemHost) <>
+    brackets ("PID " <> fromString (show _itemProcess)) <>
     brackets ("ThreadId " <> fromText (getThreadIdText _itemThread)) <>
     mconcat ks <>
-    maybe mempty (brackets . fromText . T.pack . locationToString) _itemLoc <>
+    maybe mempty (brackets . fromString . locationToString) _itemLoc <>
     fromText " " <> (unLogStr _itemMessage)
   where
     nowStr = fromText (formatAsLogTime _itemTime)
     ks = map brackets $ getKeys verb _itemPayload
     renderSeverity' severity =
-      colorBySeverity withColor severity (renderSeverity severity)
+      colorBySeverity withColor severity (fromText $ renderSeverity severity)
 
 -- | Logs items as JSON. This can be useful in circumstances where you already
 -- have infrastructure that is expecting JSON to be logged to a standard stream
@@ -148,15 +151,15 @@ bracketFormat withColor verb Item{..} =
 -- > {"at":"2018-10-02T21:50:30.4523848Z","env":"production","ns":["MyApp","confrabulation"],"data":{"confrab_factor":42},"app":["MyApp"],"msg":"Confrabulating widgets, with extra namespace and context","pid":"10456","loc":{"loc_col":11,"loc_pkg":"main","loc_mod":"Helpers.Logging","loc_fn":"Helpers\\Logging.hs","loc_ln":53},"host":"myhost.example.com","sev":"Debug","thread":"ThreadId 139"}
 -- > {"at":"2018-10-02T21:50:30.4523848Z","env":"production","ns":["MyApp"],"data":{},"app":["MyApp"],"msg":"Namespace and context are back to normal","pid":"10456","loc":{"loc_col":9,"loc_pkg":"main","loc_mod":"Helpers.Logging","loc_fn":"Helpers\\Logging.hs","loc_ln":55},"host":"myhost.example.com","sev":"Info","thread":"ThreadId 139"}
 jsonFormat :: LogItem a => ItemFormatter a
-jsonFormat withColor verb i =
-  fromText $
+jsonFormat withColor verb i = textBuilderToBS $
+  appendNL $
   colorBySeverity withColor (_itemSeverity i) $
-  toStrict $ TL.decodeUtf8 $ encode $ itemJson verb i
+  encodeToTextBuilder $ itemJson verb i
 
 -- | Color a text message based on `Severity`. `ErrorS` and more severe errors
 -- are colored red, `WarningS` is colored yellow, and all other messages are
 -- rendered in the default color.
-colorBySeverity :: Bool -> Severity -> Text -> Text
+colorBySeverity :: Bool -> Severity -> TL.Builder -> TL.Builder
 colorBySeverity withColor severity msg = case severity of
   EmergencyS -> red msg
   AlertS     -> red msg

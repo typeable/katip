@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes        #-}
 module Katip.Tests.Scribes.Handle
     ( tests
     ) where
@@ -7,12 +7,11 @@ module Katip.Tests.Scribes.Handle
 -------------------------------------------------------------------------------
 import           Control.Monad
 import           Data.Aeson
-import qualified Data.ByteString.Char8      as B
+import           Data.ByteString.Builder    as B
 import qualified Data.ByteString.Lazy       as BL
 import           Data.Monoid                as M
 import           Data.Text                  (Text)
 import qualified Data.Text                  as T
-import qualified Data.Text.Encoding         as T
 import qualified Data.Text.Lazy             as LT
 import qualified Data.Text.Lazy.Builder     as LT
 import           Data.Time
@@ -245,14 +244,13 @@ writeJsonLog = writeFormattedLog jsonFormat
 
 writeFormattedLog :: (forall a . LogItem a => ItemFormatter a) -> (FilePath, Handle) -> IO (BL.ByteString)
 writeFormattedLog format (path, h) = do
-    mapM_ (put . formatOne) genItems
-    mapM_ (put . formatOne) genTypedItems
+    mapM_ put genItems
+    mapM_ put genTypedItems
     hClose h
     BL.readFile path
   where
-    formatOne :: LogItem a => Item a -> Text
-    formatOne = LT.toStrict . LT.toLazyText . format False V3
-    put = B.hPutStrLn h . T.encodeUtf8
+    put :: (LogItem a) => Item a -> IO ()
+    put = BL.hPutStr h . toLazyByteString . format False V3
 
 setupTempFile :: IO (FilePath, Handle)
 setupTempFile = do
