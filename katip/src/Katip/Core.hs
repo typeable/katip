@@ -31,6 +31,7 @@ import qualified Control.Concurrent.STM.TBQueue    as BQ
 import           Control.Exception.Safe
 import           Control.Monad                     (unless, void, when)
 import           Control.Monad.Base
+import           Data.Text.Encoding                as T
 #if MIN_VERSION_base(4, 9, 0)
 import qualified Control.Monad.Fail                as MF
 #endif
@@ -55,6 +56,7 @@ import qualified Control.Monad.Trans.Writer.Strict as Strict (WriterT,
 import           Data.Aeson                        (FromJSON (..), ToJSON (..),
                                                     object)
 import qualified Data.Aeson                        as A
+import qualified Data.ByteString.Builder           as B
 import           Data.Foldable                     as FT
 import qualified Data.HashMap.Strict               as HM
 import           Data.List
@@ -65,7 +67,6 @@ import           Data.String
 import           Data.String.Conv
 import           Data.Text                         (Text)
 import qualified Data.Text                         as T
-import qualified Data.Text.Lazy.Builder            as B
 import           Data.Time
 import           GHC.Generics                      hiding (to)
 #if MIN_VERSION_base(4, 8, 0)
@@ -199,13 +200,15 @@ instance FromJSON Verbosity where
       _    -> fail $ "Invalid Verbosity " ++ toS s
 
 
+
+
 -------------------------------------------------------------------------------
 -- | Log message with Builder underneath; use '<>' to concat in O(1).
 newtype LogStr = LogStr { unLogStr :: B.Builder }
-    deriving (Generic, Show, Eq)
+    deriving (Generic)
 
 instance IsString LogStr where
-    fromString = LogStr . B.fromString
+    fromString = LogStr . logStrText . T.pack
 
 
 instance Semigroup LogStr where
@@ -217,18 +220,20 @@ instance Monoid LogStr where
     mempty = LogStr mempty
 
 
-instance FromJSON LogStr where
-    parseJSON = A.withText "LogStr" parseLogStr
-      where
-        parseLogStr = return . LogStr . B.fromText
+-- instance FromJSON LogStr where
+--     parseJSON = A.withText "LogStr" parseLogStr
+--       where
+--         parseLogStr = return . LogStr . B.fromText
 
 -------------------------------------------------------------------------------
 -- | Pack any string-like thing into a 'LogStr'. This will
 -- automatically work on 'String', 'ByteString', 'Text' and any of the
 -- lazy variants.
 logStr :: StringConv a Text => a -> LogStr
-logStr t = LogStr (B.fromText $ toS t)
+logStr t = logStrText . toS
 
+logStrText :: Text -> LogStr
+logStrText = LogStr . B.byteString . T.encodeUtf8
 
 -------------------------------------------------------------------------------
 -- | Shorthand for 'logStr'

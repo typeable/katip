@@ -4,15 +4,17 @@ module Katip.Scribes.Handle where
 import           Control.Applicative    as A
 import           Control.Concurrent
 import           Control.Exception      (bracket_, finally)
+import           Data.ByteString.Lazy as BL (hPutStr)
+import           Data.ByteString.Builder as B
 import           Data.Aeson
-import           Data.Text.Lazy         (toStrict)
-import           Data.Text.Lazy.Encoding     (decodeUtf8)
+import           Data.Text as T (pack)
+import           Data.Text.Encoding as T
+import           Data.Text.Lazy as TL (toStrict)
+import           Data.Text.Lazy.Encoding as TL (decodeUtf8)
 import qualified Data.HashMap.Strict    as HM
 import           Data.Monoid            as M
 import           Data.Scientific        as S
 import           Data.Text              (Text)
-import           Data.Text.Lazy.Builder
-import           Data.Text.Lazy.IO      as T
 import           System.IO
 -------------------------------------------------------------------------------
 import           Katip.Core
@@ -20,23 +22,26 @@ import           Katip.Format.Time      (formatAsLogTime)
 -------------------------------------------------------------------------------
 
 
+
+fromText :: Text -> Builder
+fromText = B.byteString . T.encodeUtf8
+
 -------------------------------------------------------------------------------
 brackets :: Builder -> Builder
-brackets m = fromText "[" M.<> m <> fromText "]"
-
+brackets m = fromText "[" <> m <> fromText "]"
 
 -------------------------------------------------------------------------------
 getKeys :: LogItem s => Verbosity -> s -> [Builder]
-getKeys verb a = concat (renderPair A.<$> HM.toList (payloadObject verb a))
+getKeys verb a = HM.toList (payloadObject verb a) >>= renderPair
   where
     renderPair :: (Text, Value) -> [Builder]
     renderPair (k,v) =
       case v of
         Object o -> concat [renderPair (k <> "." <> k', v')  | (k', v') <- HM.toList o]
-        String t -> [fromText (k <> ":" <> t)]
-        Number n -> [fromText (k <> ":") <> fromString (formatNumber n)]
-        Bool b -> [fromText (k <> ":") <> fromString (show b)]
-        Null -> [fromText (k <> ":null")]
+        String t -> [fromText k <> string7 ":" <> fromText t]
+        Number n -> [fromText k <> string7 ":" <> string7 (formatNumber n)]
+        Bool b -> [fromText k <> string7 ":" <> string7 (show b)]
+        Null -> [fromText k <> string7 ":null"]
         _ -> mempty -- Can't think of a sensible way to handle arrays
     formatNumber :: Scientific -> String
     formatNumber n =
@@ -77,14 +82,12 @@ mkHandleScribeWithFormatter :: (forall a . LogItem a => ItemFormatter a)
                             -> Verbosity
                             -> IO Scribe
 mkHandleScribeWithFormatter itemFormatter cs h permitF verb = do
-    hSetBuffering h LineBuffering
     colorize <- case cs of
       ColorIfTerminal -> hIsTerminalDevice h
       ColorLog b      -> return b
     lock <- newMVar ()
-    let logger i@Item{..} = do
-          bracket_ (takeMVar lock) (putMVar lock ()) $
-            T.hPutStrLn h $ toLazyText $ itemFormatter colorize verb i
+    let logger i@Item{..} = withMVar lock $ \() -> do
+          BL.hPutStr h $ toLazyByteString $ itemFormatter colorize verb i
     return $ Scribe logger (hFlush h) permitF
 
 
@@ -107,7 +110,7 @@ mkFileScribe f permitF verb = do
 -- format.
 --
 -- See `bracketFormat` and `jsonFormat` for examples.
-type ItemFormatter a = Bool -> Verbosity -> Item a -> Builder
+type ItemFormatter a = Bool -> Verbosity -> Item a -> B.Builder
 
 
 formatItem :: LogItem a => ItemFormatter a
@@ -125,11 +128,11 @@ bracketFormat withColor verb Item{..} =
     brackets nowStr <>
     brackets (mconcat $ map fromText $ intercalateNs _itemNamespace) <>
     brackets (fromText (renderSeverity' _itemSeverity)) <>
-    brackets (fromString _itemHost) <>
-    brackets ("PID " <> fromString (show _itemProcess)) <>
+    brackets (fromText (T.pack _itemHost)) <>
+    brackets ("PID " <> fromText (T.pack $ show _itemProcess)) <>
     brackets ("ThreadId " <> fromText (getThreadIdText _itemThread)) <>
     mconcat ks <>
-    maybe mempty (brackets . fromString . locationToString) _itemLoc <>
+    maybe mempty (brackets . fromText . T.pack . locationToString) _itemLoc <>
     fromText " " <> (unLogStr _itemMessage)
   where
     nowStr = fromText (formatAsLogTime _itemTime)
@@ -148,7 +151,7 @@ jsonFormat :: LogItem a => ItemFormatter a
 jsonFormat withColor verb i =
   fromText $
   colorBySeverity withColor (_itemSeverity i) $
-  toStrict $ decodeUtf8 $ encode $ itemJson verb i
+  toStrict $ TL.decodeUtf8 $ encode $ itemJson verb i
 
 -- | Color a text message based on `Severity`. `ErrorS` and more severe errors
 -- are colored red, `WarningS` is colored yellow, and all other messages are
