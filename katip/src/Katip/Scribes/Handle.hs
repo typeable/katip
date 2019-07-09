@@ -72,6 +72,19 @@ data ColorStrategy
 mkHandleScribe :: ColorStrategy -> Handle -> PermitFunc -> Verbosity -> IO Scribe
 mkHandleScribe = mkHandleScribeWithFormatter bracketFormat
 
+
+mkFileScribeWithFormatter :: (forall a . LogItem a => ItemFormatter a)
+                          -> ColorStrategy
+                          -> FilePath
+                          -> PermitFunc
+                          -> Verbosity
+                          -> IO Scribe
+mkFileScribeWithFormatter formatter color f permitF verb = do
+  h <- openBinaryFile f AppendMode
+  Scribe logger finalizer permit <- mkHandleScribeWithFormatter formatter color h permitF verb
+  return (Scribe logger (finalizer `finally` hClose h) permit)
+
+
 -- | Logs to a file handle such as stdout, stderr, or a file. Takes a custom
 -- `ItemFormatter` that can be used to format `Item` as needed.
 --
@@ -100,10 +113,7 @@ mkHandleScribeWithFormatter itemFormatter cs h permitF verb = do
 -- 'closeScribe'/'closeScribes'. Does not do log coloring. Sets handle
 -- to 'LineBuffering' mode.
 mkFileScribe :: FilePath -> PermitFunc -> Verbosity -> IO Scribe
-mkFileScribe f permitF verb = do
-  h <- openFile f AppendMode
-  Scribe logger finalizer permit <- mkHandleScribe (ColorLog False) h permitF verb
-  return (Scribe logger (finalizer `finally` hClose h) permit)
+mkFileScribe = mkFileScribeWithFormatter bracketFormat (ColorLog False)
 
 
 -------------------------------------------------------------------------------
