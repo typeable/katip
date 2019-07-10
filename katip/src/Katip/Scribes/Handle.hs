@@ -8,6 +8,7 @@ import           Data.Aeson
 import           Data.Aeson.Text
 import           Data.ByteString.Builder as B
 import           Data.ByteString.Lazy    as BL (hPutStr)
+import           Data.ByteString.Lazy.Char8 as BL (singleton)
 import           Data.Monoid            as M
 import           Data.Scientific        as S
 import           Data.Text              (Text)
@@ -29,8 +30,8 @@ brackets m = fromText "[" M.<> m <> fromText "]"
 textBuilderToBS :: TL.Builder -> B.Builder
 textBuilderToBS = B.lazyByteString . encodeUtf8 . toLazyText
 
-appendNL :: TL.Builder -> TL.Builder
-appendNL b = b <> TL.singleton '\n'
+appendNL :: B.Builder -> B.Builder
+appendNL b = b <> B.lazyByteString (BL.singleton '\n')
 
 -------------------------------------------------------------------------------
 getKeys :: LogItem s => Verbosity -> s -> [TL.Builder]
@@ -137,7 +138,7 @@ formatItem = bracketFormat
 -- > [2016-05-11 21:01:15][MyApp.confrabulation][Debug][myhost.example.com][PID 1724][ThreadId 1154][confrab_factor:42.0][main:Helpers.Logging Helpers/Logging.hs:41:9] Confrabulating widgets, with extra namespace and context
 -- > [2016-05-11 21:01:15][MyApp][Info][myhost.example.com][PID 1724][ThreadId 1154][main:Helpers.Logging Helpers/Logging.hs:43:7] Namespace and context are back to normal
 bracketFormat :: LogItem a => ItemFormatter a
-bracketFormat withColor verb Item{..} = textBuilderToBS $ appendNL $
+bracketFormat withColor verb Item{..} = appendNL $ textBuilderToBS $
     brackets nowStr <>
     brackets (mconcat $ map fromText $ intercalateNs _itemNamespace) <>
     brackets (renderSeverity' _itemSeverity) <>
@@ -161,8 +162,8 @@ bracketFormat withColor verb Item{..} = textBuilderToBS $ appendNL $
 -- > {"at":"2018-10-02T21:50:30.4523848Z","env":"production","ns":["MyApp","confrabulation"],"data":{"confrab_factor":42},"app":["MyApp"],"msg":"Confrabulating widgets, with extra namespace and context","pid":"10456","loc":{"loc_col":11,"loc_pkg":"main","loc_mod":"Helpers.Logging","loc_fn":"Helpers\\Logging.hs","loc_ln":53},"host":"myhost.example.com","sev":"Debug","thread":"ThreadId 139"}
 -- > {"at":"2018-10-02T21:50:30.4523848Z","env":"production","ns":["MyApp"],"data":{},"app":["MyApp"],"msg":"Namespace and context are back to normal","pid":"10456","loc":{"loc_col":9,"loc_pkg":"main","loc_mod":"Helpers.Logging","loc_fn":"Helpers\\Logging.hs","loc_ln":55},"host":"myhost.example.com","sev":"Info","thread":"ThreadId 139"}
 jsonFormat :: LogItem a => ItemFormatter a
-jsonFormat withColor verb i = textBuilderToBS $
-  appendNL $
+jsonFormat withColor verb i = appendNL $
+  textBuilderToBS $
   colorBySeverity withColor (_itemSeverity i) $
   encodeToTextBuilder $ itemJson verb i
 
