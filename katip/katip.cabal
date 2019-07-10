@@ -43,15 +43,15 @@ library
                  , Katip.Scribes.Handle
                  , Katip.Scribes.RotatingHandler
 
-  default-extensions:
-    DeriveGeneric
-    FlexibleContexts
-    GeneralizedNewtypeDeriving
-    MultiParamTypeClasses
-    RankNTypes
-    RecordWildCards
-    TemplateHaskell
-    OverloadedStrings
+  default-extensions: DeriveGeneric
+                    , FlexibleContexts
+                    , GeneralizedNewtypeDeriving
+                    , LambdaCase
+                    , MultiParamTypeClasses
+                    , OverloadedStrings
+                    , RankNTypes
+                    , RecordWildCards
+                    , TemplateHaskell
 
   build-depends: base >=4.9.0.0 && <5
                , aeson >=0.6
@@ -71,7 +71,7 @@ library
                , safe-exceptions >= 0.1.0.0
                , scientific >= 0.3.3.0
                , semigroups
-               , stm >= 2.4
+               , stm >= 2.4 && < 2.5
                , string-conv >= 0.1
                , template-haskell >= 2.8
                , text >= 0.11
