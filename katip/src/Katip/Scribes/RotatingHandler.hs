@@ -3,6 +3,7 @@ module Katip.Scribes.RotatingHandler where
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Debounce
 import Control.DeepSeq
 import Control.Exception
 import Control.Monad
@@ -29,7 +30,7 @@ data FileOwnerSettings = FileOwnerSettings
 
 defaultFileOwnerSettings :: FileOwnerSettings
 defaultFileOwnerSettings = FileOwnerSettings
-  { fosDebounceFreq = 200000 -- every 200ms
+  { fosDebounceFreq = Just 200000 -- every 200ms
   , fosDataQueueLen = 1000
   , fosControlQueueLen = 100
   }
@@ -45,7 +46,8 @@ newFileOwner fp s = do
   dqueue <- newTBQueueIO $ fosDataQueueLen s
   cqueue <- newTBQueueIO $ fosControlQueueLen s
   let
-    newResource = openBinaryFile fp AppendMode
+    newResource = do
+      openBinaryFile fp AppendMode
     ack = newResource >>= newIORef
     release ref = do
       h <- readIORef ref
@@ -61,24 +63,32 @@ newFileOwner fp s = do
         readMsg
           =   (Left <$> readTBQueue cqueue)
           <|> (Right <$> readAllData)
-      atomically readMsg >>= \case
-        Right bs -> do
-          h <- readIORef ref
-          BL.hPutStr h $ mconcat bs
-          -- flush ref
-          go ref
-        Left c -> case c of
-          CloseMsg -> return ()
-          FlushMsg -> do
+        debounce action = case fosDebounceFreq s of
+          Nothing -> do
+            return action
+          Just freq -> mkDebounce $ defaultDebounceSettings
+            { debounceAction = action
+            , debounceFreq   = freq }
+      flush <- debounce $ readIORef ref >>= hFlush
+      let
+        recur = atomically readMsg >>= \case
+          Right bs -> do
             h <- readIORef ref
-            hFlush h
-            go ref
-          ReopenMsg -> do
-            newH <- newResource
-            oldH <- atomicModifyIORef' ref (\oldH -> (newH, oldH))
-            hFlush oldH
-            hClose oldH
-            go ref
+            BL.hPutStr h $ mconcat bs
+            flush
+            recur
+          Left c -> case c of
+            CloseMsg -> return () -- release will close the handler
+            FlushMsg -> do
+              readIORef ref >>= hFlush
+              recur
+            ReopenMsg -> do
+              newH <- newResource
+              oldH <- atomicModifyIORef' ref (\oldH -> (newH, oldH))
+              hFlush oldH
+              hClose oldH
+              recur
+      recur
     worker :: IO ()
     worker = bracket ack release go
   asyncRet <- async worker
