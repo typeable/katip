@@ -20,6 +20,7 @@ import qualified Data.HashMap.Strict    as HM
 -------------------------------------------------------------------------------
 import           Katip.Core
 import           Katip.Format.Time      (formatAsLogTime)
+import           Katip.Scribes.Handle.FileOwner
 -------------------------------------------------------------------------------
 
 
@@ -106,6 +107,26 @@ mkHandleScribeWithFormatter itemFormatter cs h permitF verb = do
           BL.hPutStr h $ toLazyByteString $ itemFormatter colorize verb i
     return $ Scribe logger (hFlush h) permitF
 
+-- | Just like mkFileScribeWithFormatter but does it with FileOwner. You can
+-- rotate your logs with commands to the FileOwner directly. This scribe will
+-- send messages to the given FileOwner
+mkFileOwnerScribeWithFormatter :: (forall a . LogItem a => ItemFormatter a)
+                               -> ColorStrategy
+                               -> FileOwner
+                               -> PermitFunc
+                               -> Verbosity
+                               -> IO Scribe
+mkFileOwnerScribeWithFormatter itemFormatter cs owner permitF verb = do
+    let
+      colorize = case cs of
+        ColorIfTerminal -> False
+        -- File is never a terminal
+        ColorLog b      -> b
+      logger item = do
+        writeFileOwner owner $ toLazyByteString
+          $ itemFormatter colorize verb item
+      scribe = Scribe logger (fileOwnerControl owner CloseMsg) permitF
+    return scribe
 
 -------------------------------------------------------------------------------
 -- | A specialization of 'mkHandleScribe' that takes a 'FilePath'

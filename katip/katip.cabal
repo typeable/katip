@@ -41,7 +41,7 @@ library
                  , Katip.Format.Time
                  , Katip.Monadic
                  , Katip.Scribes.Handle
-                 , Katip.Scribes.RotatingHandler
+                 , Katip.Scribes.Handle.FileOwner
 
   default-extensions: DeriveGeneric
                     , FlexibleContexts

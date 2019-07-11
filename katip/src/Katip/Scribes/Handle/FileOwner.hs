@@ -1,4 +1,4 @@
-module Katip.Scribes.RotatingHandler where
+module Katip.Scribes.Handle.FileOwner where
 
 import Control.Applicative
 import Control.Concurrent
@@ -105,8 +105,6 @@ newFileOwner fp s = do
     , foControlQueue = cqueue
     , foAsync        = asyncRet
     }
-
-
 
 fileOwnerControl :: FileOwner -> ControlMsg -> IO ()
 fileOwnerControl fo msg = do
