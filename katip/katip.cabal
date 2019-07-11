@@ -51,6 +51,7 @@ library
                     , OverloadedStrings
                     , RankNTypes
                     , RecordWildCards
+                    , ScopedTypeVariables
                     , TemplateHaskell
 
   build-depends: base >=4.9.0.0 && <5

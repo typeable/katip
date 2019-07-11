@@ -1,6 +1,7 @@
 module Katip.Scribes.RotatingHandler where
 
 import Control.Applicative
+import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Debounce
@@ -65,7 +66,7 @@ newFileOwner fp s = do
           <|> (Right <$> readAllData)
         debounce action = case fosDebounceFreq s of
           Nothing -> do
-            return action
+            return $ return ()
           Just freq -> mkDebounce $ defaultDebounceSettings
             { debounceAction = action
             , debounceFreq   = freq }
@@ -75,7 +76,7 @@ newFileOwner fp s = do
           Right bs -> do
             h <- readIORef ref
             BL.hPutStr h $ mconcat bs
-            flush
+            flush -- auto debounced flush
             recur
           Left c -> case c of
             CloseMsg -> return () -- release will close the handler
@@ -90,7 +91,14 @@ newFileOwner fp s = do
               recur
       recur
     worker :: IO ()
-    worker = bracket ack release go
+    worker = try (bracket ack release go) >>= \case
+      Left (_ :: SomeException)   -> do
+        threadDelay 100000
+        -- to not restart the worker function too often
+        worker
+        -- We dont want the worker thread become unavailable because
+        -- of exceptions. E.g. could not create or write the file.
+      Right ()                    -> return ()
   asyncRet <- async worker
   return $ FileOwner
     { foDataQueune   = dqueue
