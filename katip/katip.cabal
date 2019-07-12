@@ -43,7 +43,8 @@ library
                  , Katip.Scribes.Handle
                  , Katip.Scribes.Handle.FileOwner
 
-  default-extensions: DeriveGeneric
+  default-extensions: CPP
+                    , DeriveGeneric
                     , FlexibleContexts
                     , GeneralizedNewtypeDeriving
                     , LambdaCase
@@ -72,7 +73,7 @@ library
                , safe-exceptions >= 0.1.0.0
                , scientific >= 0.3.3.0
                , semigroups
-               , stm >= 2.4 && < 2.5
+               , stm >= 2.4
                , string-conv >= 0.1
                , template-haskell >= 2.8
                , text >= 0.11

@@ -1,18 +1,14 @@
 nix:
   packages:
     - zlib
-resolver: lts-13.21
+resolver: lts-12.26
 packages:
   - katip
   - katip-elasticsearch
   - katip-datadog
   - katip-logzio
 extra-deps:
-  - binary-0.8.7.0
   - bloodhound-0.16.0.0
-  - containers-0.5.11.0
-  - hedgehog-1.0
-  - tasty-hedgehog-1.0.0.1
   - unliftio-core-0.1.2.0
 flags:
   katip:

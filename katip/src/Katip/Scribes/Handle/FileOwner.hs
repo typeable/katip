@@ -14,6 +14,11 @@ import GHC.IO.Handle
 import GHC.IO.Handle.FD
 import GHC.IO.IOMode
 
+#if MIN_VERSION_stm(2,5,0)
+import Numeric.Natural
+#endif
+
+
 -- | File owner struct writing data to the file
 -- sequentially. Automatic buffer flushing and log rotating.
 data FileOwner = FileOwner
@@ -23,16 +28,22 @@ data FileOwner = FileOwner
     -- ^ Wait for to be sure that worker thread is closed.
   }
 
+#if MIN_VERSION_stm(2,5,0)
+type QueueLen = Natural
+#else
+type QueueLen = Int
+#endif
+
 data FileOwnerSettings = FileOwnerSettings
   { fosDebounceFreq    :: Maybe Int
-  , fosDataQueueLen    :: Int
-  , fosControlQueueLen :: Int
+  , fosDataQueueLen    :: QueueLen
+  , fosControlQueueLen :: QueueLen
   }
 
 defaultFileOwnerSettings :: FileOwnerSettings
 defaultFileOwnerSettings = FileOwnerSettings
-  { fosDebounceFreq = Just 200000 -- every 200ms
-  , fosDataQueueLen = 1000
+  { fosDebounceFreq    = Just 200000 -- every 200ms
+  , fosDataQueueLen    = 1000
   , fosControlQueueLen = 100
   }
 
