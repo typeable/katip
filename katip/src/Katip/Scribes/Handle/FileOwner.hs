@@ -91,7 +91,7 @@ newFileOwner fp s = do
             recur
           Left c -> case c of
             CloseMsg -> do
-              lasMsgs <- atomically $ flushTBQueue dqueue
+              lastMsgs <- atomically $ flushTBQueue dqueue
               -- flush never blocks
               case lastMsgs of
                 [] -> return ()
