@@ -90,7 +90,15 @@ newFileOwner fp s = do
             flush -- auto debounced flush
             recur
           Left c -> case c of
-            CloseMsg -> return () -- release will close the handler
+            CloseMsg -> do
+              lasMsgs <- atomically $ flushTBQueue dqueue
+              -- flush never blocks
+              case lastMsgs of
+                [] -> return ()
+                _  -> do
+                  h <- readIORef ref
+                  BL.hPutStr h $ mconcat lastMsgs
+                  return () -- release will flush and close the handler
             FlushMsg -> do
               readIORef ref >>= hFlush
               recur
