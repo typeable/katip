@@ -1,4 +1,7 @@
 # resolver: lts-11.14
+nix:
+  packages:
+    - zlib
 resolver: lts-13.21
 packages:
   - katip
