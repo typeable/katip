@@ -28,7 +28,7 @@ import           Control.Retry                           (RetryPolicy,
                                                           recovering)
 import           Data.Aeson
 import           Data.ByteString.Lazy                    (ByteString)
-import           Data.List.NonEmpty                      (NonEmpty(..))
+import           Data.List.NonEmpty                      (NonEmpty (..))
 import           Data.Monoid                             ((<>))
 import           Data.Text                               (Text)
 import qualified Data.Text                               as T
@@ -266,13 +266,14 @@ mkEsScribe
                  )
     => EsScribeCfg v
     -> BHEnv v
+    -> (ESVersion v => proxy v -> MappingName v -> Value)
     -> IndexName v
     -- ^ Treated as a prefix if index sharding is enabled
     -> MappingName v
     -> Severity
     -> Verbosity
     -> IO Scribe
-mkEsScribe cfg@EsScribeCfg {..} env ix mapping sev verb = do
+mkEsScribe cfg@EsScribeCfg {..} env indexMapper ix mapping sev verb = do
   q <- newTBMQueueIO $ unEsQueueSize essQueueSize
   endSig <- newEmptyMVar
 
@@ -320,7 +321,7 @@ mkEsScribe cfg@EsScribeCfg {..} env ix mapping sev verb = do
       NoIndexSharding -> False
       _               -> True
     tpl = toIndexTemplate prx (toTemplatePattern prx (ixn <> "-*")) (Just essIndexSettings) [toJSON base]
-    base = baseMapping prx mapping
+    base = indexMapper prx mapping
     ixn = fromIndexName prx ix
     itemJson' :: LogItem a => Item a -> Value
     itemJson' i

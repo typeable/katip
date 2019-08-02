@@ -1,10 +1,28 @@
-resolver: lts-11.14
+# resolver: lts-11.14
+resolver: lts-13.21
 packages:
   - katip
   - katip-elasticsearch
+
 extra-deps:
   - bloodhound-0.16.0.0
+  - containers-0.5.11.0
+  - derive-2.6.5
+  - libssh2-0.2.0.7
+  - mersenne-random-1.0.0.1
+  - open-union-0.3.0.0
+  - proto-lens-0.5.0.0
+  - proto-lens-protobuf-types-0.5.0.0
+  - proto-lens-protoc-0.5.0.0
+  - proto-lens-runtime-0.5.0.0
+  - proto-lens-setup-0.4.0.2
+  - binary-0.8.7.0
+  - quickcheck-arbitrary-template-0.2.0.0
+  - quickcheck-properties-0.1
+  - transformers-0.5.6.2
   - unliftio-core-0.1.2.0
+  - writer-cps-transformers-0.1.1.4
+
 flags:
   katip:
     lib-Werror: true
