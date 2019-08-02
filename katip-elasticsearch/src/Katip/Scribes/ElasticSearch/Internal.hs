@@ -266,7 +266,7 @@ mkEsScribe
                  )
     => EsScribeCfg v
     -> BHEnv v
-    -> (ESVersion v => proxy v -> MappingName v -> Value)
+    -> (Typeable.Proxy v -> MappingName v -> Value)
     -> IndexName v
     -- ^ Treated as a prefix if index sharding is enabled
     -> MappingName v
