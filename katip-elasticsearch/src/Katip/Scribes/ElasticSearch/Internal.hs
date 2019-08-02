@@ -266,14 +266,13 @@ mkEsScribe
                  )
     => EsScribeCfg v
     -> BHEnv v
-    -> (Typeable.Proxy v -> MappingName v -> Value)
     -> IndexName v
     -- ^ Treated as a prefix if index sharding is enabled
     -> MappingName v
     -> Severity
     -> Verbosity
     -> IO Scribe
-mkEsScribe cfg@EsScribeCfg {..} env indexMapper ix mapping sev verb = do
+mkEsScribe cfg@EsScribeCfg {..} env ix mapping sev verb = do
   q <- newTBMQueueIO $ unEsQueueSize essQueueSize
   endSig <- newEmptyMVar
 
@@ -321,7 +320,7 @@ mkEsScribe cfg@EsScribeCfg {..} env indexMapper ix mapping sev verb = do
       NoIndexSharding -> False
       _               -> True
     tpl = toIndexTemplate prx (toTemplatePattern prx (ixn <> "-*")) (Just essIndexSettings) [toJSON base]
-    base = indexMapper prx mapping
+    base = baseMapping prx mapping
     ixn = fromIndexName prx ix
     itemJson' :: LogItem a => Item a -> Value
     itemJson' i
