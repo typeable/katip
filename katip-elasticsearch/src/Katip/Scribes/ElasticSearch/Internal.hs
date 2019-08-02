@@ -339,7 +339,7 @@ baseMapping prx mn =
               -- ns is frequently fulltext searched
               , analyzedString "ns"
               -- we want message to be fulltext searchable
-              , analyzedString "msg"
+              , unanalyzedString "msg"
               , "loc" .= locType
               , unanalyzedString "host"
               , unanalyzedString "env"
