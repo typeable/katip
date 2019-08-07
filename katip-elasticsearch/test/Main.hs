@@ -161,7 +161,9 @@ setupSearch
 setupSearch prx modScribeCfg = do
     bh prx (dropESSchema prx)
     mgr <- newManager defaultManagerSettings
-    mkEsScribe cfg (mkBHEnv prx (svr prx) mgr) (ixn prx) (mn prx) (permitItem DebugS) V3
+    let mname = mn prx
+    mkEsScribe cfg (mkBHEnv prx (svr prx) mgr) (ixn prx) mname (baseMapping prx mname)
+      (permitItem DebugS) V3
   where
     cfg :: EsScribeCfg v
     cfg = modScribeCfg $

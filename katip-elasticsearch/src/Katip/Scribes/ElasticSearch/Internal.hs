@@ -268,10 +268,13 @@ mkEsScribe
     -> IndexName v
     -- ^ Treated as a prefix if index sharding is enabled
     -> MappingName v
+    -> Value
+    -- ^ Index mapping value. Use 'baseMapping' as default value
+    -- constructor.
     -> PermitFunc
     -> Verbosity
     -> IO Scribe
-mkEsScribe cfg@EsScribeCfg {..} env ix mapping permit verb = do
+mkEsScribe cfg@EsScribeCfg {..} env ix mapping mappingValue permit verb = do
   q <- newTBMQueueIO $ unEsQueueSize essQueueSize
   endSig <- newEmptyMVar
 
@@ -293,7 +296,7 @@ mkEsScribe cfg@EsScribeCfg {..} env ix mapping permit verb = do
               r1 <- createIndex prx essIndexSettings ix
               unless (statusIsSuccessful (responseStatus r1)) $
                 liftIO $ EX.throwIO (CouldNotCreateIndex r1)
-              r2 <- putMapping prx ix mapping base
+              r2 <- putMapping prx ix mapping mappingValue
               unless (statusIsSuccessful (responseStatus r2)) $
                 liftIO $ EX.throwIO (CouldNotCreateMapping r2)
 
@@ -318,8 +321,7 @@ mkEsScribe cfg@EsScribeCfg {..} env ix mapping permit verb = do
     shardingEnabled = case essIndexSharding of
       NoIndexSharding -> False
       _               -> True
-    tpl = toIndexTemplate prx (toTemplatePattern prx (ixn <> "-*")) (Just essIndexSettings) [toJSON base]
-    base = baseMapping prx mapping
+    tpl = toIndexTemplate prx (toTemplatePattern prx (ixn <> "-*")) (Just essIndexSettings) [mappingValue]
     ixn = fromIndexName prx ix
     itemJson' :: LogItem a => Item a -> Value
     itemJson' i
