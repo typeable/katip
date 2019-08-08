@@ -277,60 +277,56 @@ mkEsScribe
     -> PermitFunc
     -> Verbosity
     -> IO Scribe
-mkEsScribe cfg@EsScribeCfg {..} env permit verb = error "fuck"
-  -- q <- newTBMQueueIO $ unEsQueueSize essQueueSize
-  -- endSig <- newEmptyMVar
+mkEsScribe cfg@EsScribeCfg {..} env permit verb = do
+  q <- newTBMQueueIO $ unEsQueueSize essQueueSize
+  endSig <- newEmptyMVar
 
-  -- runBH prx env $ do
-  --   if shardingEnabled
-  --      then do
-  --        -- create or update
-  --        res <- putTemplate prx tpl tplName
-  --        unless (statusIsSuccessful (responseStatus res)) $
-  --          liftIO $ EX.throwIO (CouldNotPutTemplate res)
-  --      else do
-  --        ixExists <- indexExists prx ix
-  --        if ixExists
-  --           then do
-  --             res <- updateIndexSettings prx (toUpdatabaleIndexSettings prx essIndexSettings) ix
-  --             unless (statusIsSuccessful (responseStatus res)) $
-  --               liftIO $ EX.throwIO (CouldNotUpdateIndexSettings res)
-  --           else do
-  --             r1 <- createIndex prx essIndexSettings ix
-  --             unless (statusIsSuccessful (responseStatus r1)) $
-  --               liftIO $ EX.throwIO (CouldNotCreateIndex r1)
-  --             r2 <- putMapping prx ix mapping mappingValue
-  --             unless (statusIsSuccessful (responseStatus r2)) $
-  --               liftIO $ EX.throwIO (CouldNotCreateMapping r2)
+  runBH prx env $ do
+    if shardingEnabled
+       then do
+         -- create or update
+         res <- putTemplate prx tpl tplName
+         unless (statusIsSuccessful (responseStatus res)) $
+           liftIO $ EX.throwIO (CouldNotPutTemplate res)
+       else do
+         ixExists <- indexExists prx essIndexName
+         if ixExists
+            then do
+              res <- updateIndexSettings prx (toUpdatabaleIndexSettings prx essIndexSettings) essIndexName
+              unless (statusIsSuccessful (responseStatus res)) $
+                liftIO $ EX.throwIO (CouldNotUpdateIndexSettings res)
+            else do
+              r1 <- createIndex prx essIndexSettings essIndexName
+              unless (statusIsSuccessful (responseStatus r1)) $
+                liftIO $ EX.throwIO (CouldNotCreateIndex r1)
+              r2 <- putMapping prx essIndexName essIndexMapping essIndexMappingValue
+              unless (statusIsSuccessful (responseStatus r2)) $
+                liftIO $ EX.throwIO (CouldNotCreateMapping r2)
 
-  -- workers <- replicateM (unEsPoolSize essPoolSize) $ async $
-  --   startWorker cfg env mapping q
+  workers <- replicateM (unEsPoolSize essPoolSize) $ async $
+    startWorker cfg env essIndexMapping q
 
-  -- _ <- async $ do
-  --   takeMVar endSig
-  --   atomically $ closeTBMQueue q
-  --   mapM_ waitCatch workers
-  --   putMVar endSig ()
+  _ <- async $ do
+    takeMVar endSig
+    atomically $ closeTBMQueue q
+    mapM_ waitCatch workers
+    putMVar endSig ()
 
-  -- let finalizer = putMVar endSig () >> takeMVar endSig
-  -- return (Scribe (logger q) finalizer permit)
-  -- where
-  --   logger :: forall a. LogItem a => TBMQueue (IndexName v, Value) -> Item a -> IO ()
-  --   logger q i =
-  --     void $ atomically $ tryWriteTBMQueue q (chooseIxn prx ix essIndexSharding i, itemJson' i)
-  --   prx :: Typeable.Proxy v
-  --   prx = Typeable.Proxy
-  --   tplName = toTemplateName prx ixn
-  --   shardingEnabled = case essIndexSharding of
-  --     NoIndexSharding -> False
-  --     _               -> True
-  --   tpl = toIndexTemplate prx (toTemplatePattern prx (ixn <> "-*")) (Just essIndexSettings) [mappingValue]
-  --   ixn = fromIndexName prx ix
-  --   itemJson' :: LogItem a => Item a -> Value
-  --   itemJson' i
-  --     | essAnnotateTypes = itemJson verb (TypeAnnotated <$> i)
-  --     | otherwise        = itemJson verb i
-
+  let finalizer = putMVar endSig () >> takeMVar endSig
+  return (Scribe (logger q) finalizer permit)
+  where
+    logger :: forall a. LogItem a => TBMQueue (IndexName v, Value) -> Item a -> IO ()
+    logger q i =
+      void $ atomically $ tryWriteTBMQueue q
+      (chooseIxn prx essIndexName essIndexSharding i, applyItemFunc (essItemFormatter verb) i)
+    prx :: Typeable.Proxy v
+    prx = Typeable.Proxy
+    tplName = toTemplateName prx ixn
+    shardingEnabled = case essIndexSharding of
+      NoIndexSharding -> False
+      _               -> True
+    tpl = toIndexTemplate prx (toTemplatePattern prx (ixn <> "-*")) (Just essIndexSettings) [essIndexMappingValue]
+    ixn = fromIndexName prx essIndexName
 
 -------------------------------------------------------------------------------
 baseMapping :: ESVersion v => proxy v -> MappingName v -> Value
