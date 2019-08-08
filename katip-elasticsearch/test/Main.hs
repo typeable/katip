@@ -161,14 +161,14 @@ setupSearch
 setupSearch prx modScribeCfg = do
     bh prx (dropESSchema prx)
     mgr <- newManager defaultManagerSettings
-    let mname = mn prx
-    mkEsScribe cfg (mkBHEnv prx (svr prx) mgr) (ixn prx) mname (baseMapping prx mname)
+    mkEsScribe cfg (mkBHEnv prx (svr prx) mgr)
       (permitItem DebugS) V3
   where
+    mname = mn prx
     cfg :: EsScribeCfg v
     cfg = modScribeCfg $
-      (defaultEsScribeCfg' prx)
-        { essAnnotateTypes = True
+      (defaultEsScribeCfg' prx (ixn prx) mname)
+        { essItemFormatter = annotatedItemFormatter
         , essIndexSettings = ixs prx
         }
 

@@ -53,30 +53,26 @@ import           Katip.Scribes.ElasticSearch.Annotations
 -- 'defaultEsScribeCfgV1' and 'defaultESScribeCfgV5' for a good
 -- starting point depending on the ES version you have.
 data EsScribeCfg v = EsScribeCfg {
-      essRetryPolicy   :: RetryPolicy
+      essRetryPolicy       :: RetryPolicy
     -- ^ Retry policy when there are errors sending logs to the server
-    , essQueueSize     :: EsQueueSize
+    , essQueueSize         :: EsQueueSize
     -- ^ Maximum size of the bounded log queue
-    , essPoolSize      :: EsPoolSize
+    , essPoolSize          :: EsPoolSize
     -- ^ Worker pool size limit for sending data to the
-    , essAnnotateTypes :: Bool
-    -- ^ Different payload items coexist in the "data" attribute in
-    -- ES. It is possible for different payloads to have different
-    -- types for the same key, e.g. an "id" key that is sometimes a
-    -- number and sometimes a string. If you're having ES do dynamic
-    -- mapping, the first log item will set the type and any that
-    -- don't conform will be *discarded*. If you set this to True,
-    -- keys will recursively be appended with their ES core
-    -- type. e.g. "id" would become "id::l" and "id::s"
-    -- automatically, so they won't conflict. When this library
-    -- exposes a querying API, we will try to make deserialization and
-    -- querying transparently remove the type annotations if this is
-    -- enabled.
-    , essIndexSettings :: IndexSettings v
+    , essItemFormatter     :: Verbosity -> ItemFunc Value
+    -- ^ The formatter of an item. Must format any item to json
+    -- Value. You can use 'annotateValue' to get an effect of
+    -- @essAnnotateTypes@ (removed) here.
+    , essIndexName         :: IndexName v
+    , essIndexMapping      :: MappingName v
+    , essIndexMappingValue :: Value
+    -- ^ The value of index mapping. The default is 'baseMapping' but
+    -- user can override.
+    , essIndexSettings     :: IndexSettings v
     -- ^ This will be the IndexSettings type from the appropriate
     -- bloodhound module, either @Database.V1.Bloodhound@ or
     -- @Database.V5.Bloodhound@
-    , essIndexSharding :: IndexShardingPolicy
+    , essIndexSharding     :: IndexShardingPolicy
     } deriving (Typeable)
 
 
@@ -93,34 +89,47 @@ data EsScribeCfg v = EsScribeCfg {
 --     * Annotate types set to False
 --
 --     * DailyIndexSharding
-defaultEsScribeCfg' :: ESVersion v => proxy v -> EsScribeCfg v
-defaultEsScribeCfg' prx = EsScribeCfg {
-      essRetryPolicy     = exponentialBackoff 25000 <> limitRetries 5
-    , essQueueSize       = EsQueueSize 1000
-    , essPoolSize        = EsPoolSize 2
-    , essAnnotateTypes   = False
-    , essIndexSettings   = defaultIndexSettings prx
-    , essIndexSharding   = DailyIndexSharding
-    }
+defaultEsScribeCfg'
+  :: ESVersion v
+  => proxy v
+  -> IndexName v
+  -> MappingName v
+  -> EsScribeCfg v
+defaultEsScribeCfg' prx index mapping = EsScribeCfg
+  { essRetryPolicy       = exponentialBackoff 25000 <> limitRetries 5
+  , essQueueSize         = EsQueueSize 1000
+  , essPoolSize          = EsPoolSize 2
+  , essItemFormatter     = defaultItemFormatter
+  , essIndexName         = index
+  , essIndexMapping      = mapping
+  , essIndexMappingValue = baseMapping prx mapping
+  , essIndexSettings     = defaultIndexSettings prx
+  , essIndexSharding     = DailyIndexSharding
+  }
 
+defaultItemFormatter :: Verbosity -> ItemFunc Value
+defaultItemFormatter verb = ItemFunc $ \item -> itemJson verb item
+
+annotatedItemFormatter :: Verbosity -> ItemFunc Value
+annotatedItemFormatter verb = ItemFunc $ \item -> itemJson verb (TypeAnnotated <$> item)
 
 -------------------------------------------------------------------------------
 -- | Alias of 'defaultEsScribeCfgV1' to minimize API
 -- breakage. Previous versions of katip-elasticsearch only supported
 -- ES version 1.
-defaultEsScribeCfg :: EsScribeCfg ESV1
+defaultEsScribeCfg :: IndexName ESV1 -> MappingName ESV1 -> EsScribeCfg ESV1
 defaultEsScribeCfg = defaultEsScribeCfgV1
 
 
 -------------------------------------------------------------------------------
 -- | EsScribeCfg that will use ElasticSearch V1
-defaultEsScribeCfgV1 :: EsScribeCfg ESV1
+defaultEsScribeCfgV1 :: IndexName ESV1 -> MappingName ESV1 -> EsScribeCfg ESV1
 defaultEsScribeCfgV1 = defaultEsScribeCfg' (Typeable.Proxy :: Typeable.Proxy ESV1)
 
 
 -------------------------------------------------------------------------------
 -- | EsScribeCfg that will use ElasticSearch V5
-defaultEsScribeCfgV5 :: EsScribeCfg ESV5
+defaultEsScribeCfgV5 :: IndexName ESV5 -> MappingName ESV5 -> EsScribeCfg ESV5
 defaultEsScribeCfgV5 = defaultEsScribeCfg' (Typeable.Proxy :: Typeable.Proxy ESV5)
 
 
@@ -265,68 +274,62 @@ mkEsScribe
                  )
     => EsScribeCfg v
     -> BHEnv v
-    -> IndexName v
-    -- ^ Treated as a prefix if index sharding is enabled
-    -> MappingName v
-    -> Value
-    -- ^ Index mapping value. Use 'baseMapping' as default value
-    -- constructor.
     -> PermitFunc
     -> Verbosity
     -> IO Scribe
-mkEsScribe cfg@EsScribeCfg {..} env ix mapping mappingValue permit verb = do
-  q <- newTBMQueueIO $ unEsQueueSize essQueueSize
-  endSig <- newEmptyMVar
+mkEsScribe cfg@EsScribeCfg {..} env permit verb = error "fuck"
+  -- q <- newTBMQueueIO $ unEsQueueSize essQueueSize
+  -- endSig <- newEmptyMVar
 
-  runBH prx env $ do
-    if shardingEnabled
-       then do
-         -- create or update
-         res <- putTemplate prx tpl tplName
-         unless (statusIsSuccessful (responseStatus res)) $
-           liftIO $ EX.throwIO (CouldNotPutTemplate res)
-       else do
-         ixExists <- indexExists prx ix
-         if ixExists
-            then do
-              res <- updateIndexSettings prx (toUpdatabaleIndexSettings prx essIndexSettings) ix
-              unless (statusIsSuccessful (responseStatus res)) $
-                liftIO $ EX.throwIO (CouldNotUpdateIndexSettings res)
-            else do
-              r1 <- createIndex prx essIndexSettings ix
-              unless (statusIsSuccessful (responseStatus r1)) $
-                liftIO $ EX.throwIO (CouldNotCreateIndex r1)
-              r2 <- putMapping prx ix mapping mappingValue
-              unless (statusIsSuccessful (responseStatus r2)) $
-                liftIO $ EX.throwIO (CouldNotCreateMapping r2)
+  -- runBH prx env $ do
+  --   if shardingEnabled
+  --      then do
+  --        -- create or update
+  --        res <- putTemplate prx tpl tplName
+  --        unless (statusIsSuccessful (responseStatus res)) $
+  --          liftIO $ EX.throwIO (CouldNotPutTemplate res)
+  --      else do
+  --        ixExists <- indexExists prx ix
+  --        if ixExists
+  --           then do
+  --             res <- updateIndexSettings prx (toUpdatabaleIndexSettings prx essIndexSettings) ix
+  --             unless (statusIsSuccessful (responseStatus res)) $
+  --               liftIO $ EX.throwIO (CouldNotUpdateIndexSettings res)
+  --           else do
+  --             r1 <- createIndex prx essIndexSettings ix
+  --             unless (statusIsSuccessful (responseStatus r1)) $
+  --               liftIO $ EX.throwIO (CouldNotCreateIndex r1)
+  --             r2 <- putMapping prx ix mapping mappingValue
+  --             unless (statusIsSuccessful (responseStatus r2)) $
+  --               liftIO $ EX.throwIO (CouldNotCreateMapping r2)
 
-  workers <- replicateM (unEsPoolSize essPoolSize) $ async $
-    startWorker cfg env mapping q
+  -- workers <- replicateM (unEsPoolSize essPoolSize) $ async $
+  --   startWorker cfg env mapping q
 
-  _ <- async $ do
-    takeMVar endSig
-    atomically $ closeTBMQueue q
-    mapM_ waitCatch workers
-    putMVar endSig ()
+  -- _ <- async $ do
+  --   takeMVar endSig
+  --   atomically $ closeTBMQueue q
+  --   mapM_ waitCatch workers
+  --   putMVar endSig ()
 
-  let finalizer = putMVar endSig () >> takeMVar endSig
-  return (Scribe (logger q) finalizer permit)
-  where
-    logger :: forall a. LogItem a => TBMQueue (IndexName v, Value) -> Item a -> IO ()
-    logger q i =
-      void $ atomically $ tryWriteTBMQueue q (chooseIxn prx ix essIndexSharding i, itemJson' i)
-    prx :: Typeable.Proxy v
-    prx = Typeable.Proxy
-    tplName = toTemplateName prx ixn
-    shardingEnabled = case essIndexSharding of
-      NoIndexSharding -> False
-      _               -> True
-    tpl = toIndexTemplate prx (toTemplatePattern prx (ixn <> "-*")) (Just essIndexSettings) [mappingValue]
-    ixn = fromIndexName prx ix
-    itemJson' :: LogItem a => Item a -> Value
-    itemJson' i
-      | essAnnotateTypes = itemJson verb (TypeAnnotated <$> i)
-      | otherwise        = itemJson verb i
+  -- let finalizer = putMVar endSig () >> takeMVar endSig
+  -- return (Scribe (logger q) finalizer permit)
+  -- where
+  --   logger :: forall a. LogItem a => TBMQueue (IndexName v, Value) -> Item a -> IO ()
+  --   logger q i =
+  --     void $ atomically $ tryWriteTBMQueue q (chooseIxn prx ix essIndexSharding i, itemJson' i)
+  --   prx :: Typeable.Proxy v
+  --   prx = Typeable.Proxy
+  --   tplName = toTemplateName prx ixn
+  --   shardingEnabled = case essIndexSharding of
+  --     NoIndexSharding -> False
+  --     _               -> True
+  --   tpl = toIndexTemplate prx (toTemplatePattern prx (ixn <> "-*")) (Just essIndexSettings) [mappingValue]
+  --   ixn = fromIndexName prx ix
+  --   itemJson' :: LogItem a => Item a -> Value
+  --   itemJson' i
+  --     | essAnnotateTypes = itemJson verb (TypeAnnotated <$> i)
+  --     | otherwise        = itemJson verb i
 
 
 -------------------------------------------------------------------------------

@@ -574,6 +574,10 @@ itemJson verb a = toJSON $ a & itemPayload %~ payloadObject verb
 --   combined with other, custom logic with 'permitAND' and 'permitOR'
 type PermitFunc = forall a. Item a -> IO Bool
 
+-- | Generalized version of some function which takes any item and
+-- produces something. Must replace the 'PermitFunc' and maybe
+-- 'ItemFormatter'
+newtype ItemFunc r = ItemFunc (forall a. LogItem a => Item a -> r)
 
 -- | AND together 2 permit functions
 permitAND :: PermitFunc -> PermitFunc -> PermitFunc
