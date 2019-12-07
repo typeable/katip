@@ -251,7 +251,7 @@ splitTime t = asMins `divMod` 60
 data EsScribeSetupError = CouldNotCreateIndex !(Response ByteString)
                         | CouldNotUpdateIndexSettings !(Response ByteString)
                         | CouldNotCreateMapping !(Response ByteString)
-                        | CouldNotPutTemplate !(Response ByteString)
+                        | CouldNotPutTemplate Value !(Response ByteString)
                         deriving (Typeable, Show)
 
 
@@ -287,7 +287,7 @@ mkEsScribe cfg@EsScribeCfg {..} env permit verb = do
          -- create or update
          res <- putTemplate prx tpl tplName
          unless (statusIsSuccessful (responseStatus res)) $
-           liftIO $ EX.throwIO (CouldNotPutTemplate res)
+           liftIO $ EX.throwIO (CouldNotPutTemplate (toJSON tpl) res)
        else do
          ixExists <- indexExists prx essIndexName
          if ixExists
@@ -443,7 +443,7 @@ startWorker EsScribeCfg {..} env mapping q = go
 -- separate types and APIs, but the subset we use is the same for both
 -- versions. This will be kept up to date with bloodhound's supported
 -- versions and should be minimally visible to the end user.
-class ESVersion v where
+class (ToJSON (IndexTemplate v)) => ESVersion v where
   -- Types
   type BHEnv v
   type IndexSettings v
