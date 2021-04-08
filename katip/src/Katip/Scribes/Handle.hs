@@ -103,8 +103,11 @@ mkHandleScribeWithFormatter itemFormatter cs h permitF verb = do
       ColorIfTerminal -> hIsTerminalDevice h
       ColorLog b      -> return b
     lock <- newMVar ()
-    let logger i@Item{..} = withMVar lock $ \() -> do
+    let logger i = withMVar lock $ \() -> do
           BL.hPutStr h $ toLazyByteString $ itemFormatter colorize verb i
+--    let logger i = do
+--          bracket_ (takeMVar lock) (putMVar lock ()) $
+--            T.hPutStrLn h $ toLazyText $ itemFormatter colorize verb i
     return $ Scribe logger (hFlush h) permitF
 
 -- | Just like mkFileScribeWithFormatter but does it with FileOwner. You can

@@ -1026,6 +1026,7 @@ instance TH.Lift Namespace where
     lift (Namespace xs) =
       let xs' = map T.unpack xs
       in  [| Namespace (map T.pack xs') |]
+    liftTyped x = TH.unsafeTExpCoerce (TH.lift x)
 
 
 instance TH.Lift Verbosity where
@@ -1033,6 +1034,7 @@ instance TH.Lift Verbosity where
     lift V1 = [| V1 |]
     lift V2 = [| V2 |]
     lift V3 = [| V3 |]
+    liftTyped x = TH.unsafeTExpCoerce (TH.lift x)
 
 
 instance TH.Lift Severity where
@@ -1044,6 +1046,7 @@ instance TH.Lift Severity where
     lift CriticalS  = [| CriticalS |]
     lift AlertS     = [| AlertS |]
     lift EmergencyS = [| EmergencyS |]
+    liftTyped x = TH.unsafeTExpCoerce (TH.lift x)
 
 
 -- | Lift a location into an Exp.
