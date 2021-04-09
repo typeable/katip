@@ -38,7 +38,7 @@ import           Data.Typeable                           as Typeable
 import           Data.UUID
 import qualified Data.UUID.V4                            as UUID4
 #if MIN_VERSION_bloodhound(0,17,0)
-import qualified Database.Bloodhound                  as V5
+import qualified Database.Bloodhound                     as V5
 #else
 import qualified Database.V1.Bloodhound                  as V1
 import qualified Database.V5.Bloodhound                  as V5
@@ -547,16 +547,20 @@ instance ESVersion ESV5 where
   type IndexName ESV5 = V5.IndexName
   toIndexName _ = V5.IndexName
   fromIndexName _ (V5.IndexName x) = x
+#if !MIN_VERSION_bloodhound(0,17,0)
   type MappingName ESV5 = V5.MappingName
   fromMappingName _ (V5.MappingName x) = x
+#endif
   type DocId ESV5 = V5.DocId
   toDocId _ = V5.DocId
   type BH ESV5 = V5.BH
   runBH _ = V5.runBH
   type TemplateName ESV5 = V5.TemplateName
   toTemplateName _ = V5.TemplateName
+#if !MIN_VERSION_bloodhound(0,17,0)
   type TemplatePattern ESV5 = V5.TemplatePattern
   toTemplatePattern _ = V5.TemplatePattern
+#endif
   type IndexTemplate ESV5 = V5.IndexTemplate
   toIndexTemplate _ = V5.IndexTemplate
   type IndexDocumentSettings ESV5 = V5.IndexDocumentSettings
